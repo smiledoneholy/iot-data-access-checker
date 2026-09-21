@@ -16,5 +16,18 @@ export async function onRequestPost({ request, env }: AppContext): Promise<Respo
       env.DB.prepare("INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+30 days'))").bind(crypto.randomUUID(), id, await sha256(token)),
     ]);
     return json({ user: { id, email: input.email } }, 201, { "Set-Cookie": sessionCookie(token) });
-  } catch { return json({ error: "Invalid registration request." }, 400); }
-}
+    } catch (error) {
+    if (error instanceof z.ZodError) {
+      return json({
+        error: "Use a valid email and a password of 12–128 characters."
+      }, 400);
+    }
+
+    console.error("registration_failed", {
+      category: error instanceof Error ? error.name : "UnknownError"
+    });
+
+    return json({
+      error: "Registration is temporarily unavailable."
+    }, 500);
+  }
