@@ -1,0 +1,16 @@
+name = "iot-data-access-checker"
+compatibility_date = "2026-09-01"
+pages_build_output_dir = "out"
+
+[vars]
+APP_ORIGIN = "https://example.pages.dev"
+STRIPE_PRICE_ID = "REPLACE_WITH_APPROVED_PRICE_ID"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "iot-data-access-checker"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# Add secrets in the Cloudflare dashboard; never commit their values:
+# STRIPE_SECRET_KEY
+# STRIPE_WEBHOOK_SECRET
