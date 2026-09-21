@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, FileJson, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileJson, Loader2, Save, ShieldCheck } from "lucide-react";
 import { z } from "zod";
+import type { SessionUser } from "@/components/account-bar";
 import { analyzeOpenApi } from "@/lib/openapi/analyzer";
 import { parseOpenApiText, MAX_SPEC_BYTES } from "@/lib/openapi/parser";
 import type { AnalysisResult } from "@/lib/openapi/types";
@@ -50,17 +51,28 @@ function downloadPdf(result: AnalysisResult) {
   });
 }
 
-export function Checker() {
+export function Checker({ user }: { user: SessionUser | null }) {
   const [source, setSource] = useState(example);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   async function runAnalysis() {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setSaveState("idle");
     try { setResult(analyzeOpenApi(parseOpenApiText(source))); }
     catch (reason) { setResult(null); setError(reason instanceof z.ZodError ? reason.issues[0]?.message ?? "Invalid OpenAPI document." : reason instanceof Error ? reason.message : "Unable to analyze this document."); }
     finally { setBusy(false); }
+  }
+
+  async function saveReport() {
+    if (!result || !user) return;
+    setSaveState("saving");
+    try {
+      const response = await fetch("/api/reports", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) });
+      if (!response.ok) throw new Error("Unable to save the report.");
+      setSaveState("saved");
+    } catch { setSaveState("error"); }
   }
 
   async function loadFile(file?: File) {
@@ -90,7 +102,9 @@ export function Checker() {
 
       <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6">
         {!result ? <div className="flex h-full min-h-96 flex-col items-center justify-center text-center"><FileJson size={52} className="mb-5 text-cyan-400" /><h2 className="text-xl font-semibold">Your technical report appears here</h2><p className="mt-2 max-w-sm text-slate-400">Review API discoverability, authentication documentation, responses, descriptions, and reference safety.</p></div> : <>
-          <div className="flex items-end justify-between border-b border-slate-700 pb-5"><div><p className="text-sm text-slate-400">Technical readiness score</p><p className="text-5xl font-bold text-cyan-300">{result.score}<span className="text-xl text-slate-500">/100</span></p></div><button onClick={() => downloadPdf(result)} className="rounded-xl border border-cyan-500/50 px-4 py-2 text-sm text-cyan-200 hover:bg-cyan-950">Download PDF</button></div>
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-700 pb-5"><div><p className="text-sm text-slate-400">Technical readiness score</p><p className="text-5xl font-bold text-cyan-300">{result.score}<span className="text-xl text-slate-500">/100</span></p></div><div className="flex flex-wrap gap-2"><button onClick={() => downloadPdf(result)} className="rounded-xl border border-cyan-500/50 px-4 py-2 text-sm text-cyan-200 hover:bg-cyan-950">Download PDF</button>{user && <button onClick={saveReport} disabled={saveState === "saving" || saveState === "saved"} className="flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"><Save size={16} />{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save privately"}</button>}</div></div>
+          {!user && <p className="mt-3 text-xs text-slate-400">Sign in to save this report privately.</p>}
+          {saveState === "error" && <p role="alert" className="mt-3 text-sm text-rose-300">The report could not be saved. Please sign in again and retry.</p>}
           <div className="my-5 grid grid-cols-3 gap-3 text-center text-sm"><div className="rounded-xl bg-slate-800 p-3"><b className="block text-xl">{result.stats.paths}</b>Paths</div><div className="rounded-xl bg-slate-800 p-3"><b className="block text-xl">{result.stats.operations}</b>Operations</div><div className="rounded-xl bg-slate-800 p-3"><b className="block text-xl">{result.stats.schemas}</b>Schemas</div></div>
           <div className="space-y-3">{result.findings.map((finding) => <article key={finding.id} className="rounded-xl border border-slate-700 p-4"><div className="flex gap-3">{finding.severity === "pass" ? <CheckCircle2 className="shrink-0 text-emerald-400" size={20} /> : <AlertTriangle className={finding.severity === "critical" ? "shrink-0 text-rose-400" : "shrink-0 text-amber-400"} size={20} />}<div><h3 className="font-medium">{finding.title}</h3><p className="mt-1 text-sm text-slate-400">{finding.detail}</p></div></div></article>)}</div>
           <p className="mt-5 rounded-xl bg-amber-950/40 p-3 text-xs leading-5 text-amber-100">{result.disclaimer}</p>
