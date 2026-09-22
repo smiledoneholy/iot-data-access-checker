@@ -31,3 +31,4 @@ export async function onRequestPost({ request, env }: AppContext): Promise<Respo
       error: "Registration is temporarily unavailable."
     }, 500);
   }
+}
